@@ -1,3 +1,4 @@
+
 const express = require("express");
 const dotenv = require("dotenv");
 const mongoose = require("mongoose");
@@ -6,22 +7,39 @@ const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
 const fs = require("fs");
 const path = require("path");
+
 const errorHandler = require("./middleware/errorHandler");
 const userRoutes = require("./routes/userRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
 
+// Environment Variables
 dotenv.config();
 
 const app = express();
 
-// Access Log Stream
+// ========================================
+// Environment Configuration
+// ========================================
 
-const accessLogStream = fs.createWriteStream(
-  path.join(__dirname, "logs", "access.log"),
-  { flags: "a" }
-);
+const isVercel = process.env.VERCEL === "1";
 
+// ========================================
+// Access Logging
+// ========================================
+
+// Use console logs on Vercel.
+// Use logs/access.log when running locally.
+
+const accessLogStream = isVercel
+  ? process.stdout
+  : fs.createWriteStream(
+      path.join(__dirname, "logs", "access.log"),
+      { flags: "a" }
+    );
+
+// ========================================
 // Rate Limiter
+// ========================================
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -31,29 +49,43 @@ const limiter = rateLimit({
   },
 });
 
+// ========================================
 // Middleware
+// ========================================
 
+// Security headers
 app.use(helmet());
 
-// Show logs in terminal
+// Display requests in terminal
 app.use(morgan("dev"));
 
-// Save logs to logs/access.log
+// Save access logs locally or send to Vercel logs
 app.use(
   morgan("combined", {
     stream: accessLogStream,
   })
 );
 
+// Rate limiting
 app.use(limiter);
+
+// Parse JSON request bodies
 app.use(express.json());
 
-// Routes
+// ========================================
+// API Routes
+// ========================================
 
+// User signup and login
 app.use("/api/v1/user", userRoutes);
+
+// Employee CRUD operations
 app.use("/api/v1/emp", employeeRoutes);
 
+// ========================================
 // Health Check
+// ========================================
+
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "OK",
@@ -61,17 +93,25 @@ app.get("/health", (req, res) => {
   });
 });
 
+// ========================================
 // Handle Unsupported Routes
+// ========================================
+
 app.use((req, res) => {
   res.status(404).json({
     message: "Route not found",
   });
 });
 
+// ========================================
 // Global Error Handler
+// ========================================
+
 app.use(errorHandler);
 
+// ========================================
 // MongoDB Connection
+// ========================================
 
 mongoose
   .connect(process.env.MONGO_URI, {
@@ -81,14 +121,23 @@ mongoose
     console.log("MongoDB connected successfully");
   })
   .catch((error) => {
-    console.log("MongoDB connection error:", error);
+    console.error("MongoDB connection error:", error);
   });
-
 
 // ========================================
 // Start Server
 // ========================================
 
-app.listen(3000, () => {
-  console.log("Server is running on port 3000");
-});
+// Start the server locally.
+// Vercel manages the HTTP server automatically.
+
+if (!isVercel) {
+  const PORT = process.env.PORT || 3000;
+
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
+
+// Export Express app for Vercel
+module.exports = app;
