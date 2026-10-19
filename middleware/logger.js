@@ -9,10 +9,25 @@ const securityLogPath = path.join(
 const logSecurityEvent = (event, details = "") => {
   const timestamp = new Date().toISOString();
 
-  const logMessage =
-    `[${timestamp}] ${event} ${details}\n`;
+  const logMessage = `[${timestamp}] ${event} ${details}`;
 
-  fs.appendFileSync(securityLogPath, logMessage);
+  // On Vercel, write security events to the function logs.
+  if (process.env.VERCEL) {
+    console.log(logMessage);
+    return;
+  }
+
+  // Locally, keep saving security events to the log file.
+  try {
+    fs.mkdirSync(path.dirname(securityLogPath), {
+      recursive: true,
+    });
+
+    fs.appendFileSync(securityLogPath, logMessage + "\n");
+  } catch (error) {
+    console.error("Security logging error:", error.message);
+    console.log(logMessage);
+  }
 };
 
 module.exports = logSecurityEvent;
